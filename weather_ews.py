@@ -14,8 +14,8 @@ import requests
 import streamlit as st
 
 # Koordinat Resmi Pusat Desa Pagentan, Banjarnegara
-PAGENTAN_LAT = -7.30583
-PAGENTAN_LON = 109.80944
+PAGENTAN_LAT = -7.300433
+PAGENTAN_LON = 109.809946
 TZ_WIB = ZoneInfo("Asia/Jakarta")
 BACKUP_CACHE_FILE = Path("/tmp/sipaldo_pagentan_last_weather.json")
 
@@ -150,7 +150,7 @@ def fetch_realtime_open_meteo(lat: float = PAGENTAN_LAT, lon: float = PAGENTAN_L
     Menarik data cuaca & curah hujan real-time + historis 3 hari terakhir
     dari Open-Meteo API pada titik koordinat yang diminta.
 
-    Default: pusat Desa Pagentan (-7.30583, 109.80944).
+    Default: Balai Desa Pagentan (-7.300433, 109.809946).
     Bila warga membagikan titik GPS HP-nya (fitur "Lokasi Saya"), fungsi ini
     dipanggil ulang memakai koordinat warga tersebut sehingga kondisi yang
     ditampilkan benar-benar kondisi di lokasi tempat warga berdiri.

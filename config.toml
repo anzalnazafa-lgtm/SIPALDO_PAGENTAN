@@ -1,9 +1,7 @@
-[server]
-headless = true
-address = "0.0.0.0"
-port = 8501
-enableCORS = false
-enableXsrfProtection = false
+# Konfigurasi tema SIPALDO-PAGENTAN (aman untuk Streamlit Community Cloud)
+# Catatan: alamat/port server TIDAK diatur di sini agar tidak bentrok dengan
+# pengaturan platform Streamlit Cloud. Saat dijalankan lokal, default-nya
+# http://localhost:8501.
 
 [browser]
 gatherUsageStats = false

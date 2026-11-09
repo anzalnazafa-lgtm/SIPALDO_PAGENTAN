@@ -12,6 +12,14 @@ from __future__ import annotations
 import math
 import folium
 
+from lokasi_desa import (
+    PUSAT_DESA,
+    TITIK_LOKAL,
+    get_titik_lokal,
+    titik_aman,
+    LAPORAN_VERIFIKASI,
+)
+
 # =============================================================================
 # KONSTANTA SPASIAL RESMI DESA PAGENTAN (Kode Kemendagri: 33.04.14.2012)
 # Pusat Desa: -7.30583, 109.80944  (7°18'21"S 109°48'34"E)
@@ -19,151 +27,49 @@ import folium
 # Desa Plumbungan & Metawana (barat), Kalipinggan & Kalitlaga (selatan-barat),
 # Buluslawang & Tedungan (timur), Kasmaran (utara).
 # =============================================================================
-MAP_CENTER = [-7.30583, 109.80944]
+MAP_CENTER = list(PUSAT_DESA)
 
 # Bounding Box wilayah Desa Pagentan (±1,2 km dari pusat desa)
-LAT_NORTH = -7.2960
-LAT_SOUTH = -7.3160
-LON_WEST = 109.7990
-LON_EAST = 109.8200
+from lokasi_desa import LAT_NORTH, LAT_SOUTH, LON_WEST, LON_EAST  # noqa: E402
 
 # Alur Sungai Utama: Kali Putih / saluran lereng Gunung Putih–Pagentan,
 # melintasi Dusun Krajan 1 ke selatan menuju Dusun Sawangan.
 RIVER_PATH = [
-    [-7.2966, 109.8006],
-    [-7.2998, 109.8036],
-    [-7.3028, 109.8064],
-    [-7.3058, 109.8092],
-    [-7.3088, 109.8122],
-    [-7.3120, 109.8154],
-    [-7.3152, 109.8182],
+    [-7.294500, 109.806800],
+    [-7.297500, 109.808600],
+    [-7.300433, 109.810200],
+    [-7.303800, 109.811800],
+    [-7.307200, 109.812400],
+    [-7.310211, 109.812041],
+    [-7.312500, 109.813800],
 ]
 
 # Garis Punggung Tebing Curam: gawir perbukitan utara (Bulu/Kasmaran)
 # memanjang ke timur laut menuju jalur turunan Tedunan.
 NORTH_CLIFF_LINE = [
-    [-7.2972, 109.7992],
-    [-7.2978, 109.8036],
-    [-7.2988, 109.8080],
-    [-7.3002, 109.8126],
-    [-7.3020, 109.8170],
+    [-7.294800, 109.803000],
+    [-7.295600, 109.807500],
+    [-7.296400, 109.812000],
+    [-7.297400, 109.816500],
+    [-7.298400, 109.820000],
 ]
 
 # Rute Evakuasi Warga Seluruh Dusun Menuju Balai Desa, Lapangan & Posko
 EVACUATION_ROUTES = [
     # Dusun Bulu (utara) -> Pos Ronda Utara -> Balai Desa Pagentan
-    [[-7.2996, 109.8062], [-7.3032, 109.8078], [-7.30583, 109.80944]],
-    # Dusun Tedunan (timur) -> Pos Ronda Timur -> Posko Kebencanaan Desa
-    [[-7.3042, 109.8154], [-7.3048, 109.8120], [-7.3045, 109.8106]],
-    # Balai Desa (Krajan 1) <-> Posko Kebencanaan (Krajan 2)
-    [[-7.30583, 109.80944], [-7.3045, 109.8106]],
-    # Dusun Sawangan (selatan) -> Lapangan Desa -> Balai Desa
-    [[-7.3112, 109.8126], [-7.3102, 109.8100], [-7.3080, 109.8096], [-7.30583, 109.80944]],
+    [[-7.294800, 109.807500], [-7.297600, 109.809000], [-7.300433, 109.809946]],
+    # Dusun Tedunan (timur) -> jalur tengah -> Balai Desa Pagentan
+    [[-7.303500, 109.817500], [-7.302000, 109.813500], [-7.300433, 109.809946]],
+    # Balai Desa <-> Posko Kebencanaan Desa
+    [[-7.300433, 109.809946], [-7.300900, 109.810600]],
+    # Dusun Sawangan (selatan) -> Masjid Baitul'nangim -> Balai Desa Pagentan
+    [[-7.310500, 109.814500], [-7.310211, 109.812041], [-7.306000, 109.811500], [-7.300433, 109.809946]],
 ]
 
 # Lokasi Pin (Marker) Lokal Mencakup Seluruh Wilayah Desa Pagentan (5 Dusun, RW 01 - RW 08)
-VITAL_LOCATIONS = [
-    {
-        "name": "Balai Desa Pagentan (Dusun Krajan 1)",
-        "dusun": "Dusun Krajan 1 (RW 01–02)",
-        "category": "Pusat Komando Desa",
-        "coords": [-7.30583, 109.80944],
-        "color": "blue",
-        "icon": "home",
-        "desc": "Jl. Raya Pagentan – Banjarnegara. Pusat pemerintahan Desa Pagentan & komando utama peringatan dini.",
-        "info": "Pos Komando Utama Desa Pagentan",
-    },
-    {
-        "name": "Posko Kebencanaan Desa (Dusun Krajan 2)",
-        "dusun": "Dusun Krajan 2 (RW 03–04)",
-        "category": "Titik Evakuasi & Logistik",
-        "coords": [-7.3045, 109.8106],
-        "color": "green",
-        "icon": "plus-sign",
-        "desc": "Lokasi pengungsian utama warga lintas dusun, dapur umum darurat, P3K, dan gudang logistik bencana.",
-        "info": "Siaga Penuh 24 Jam saat Darurat",
-    },
-    {
-        "name": "Titik Kumpul Aman Lapangan Desa",
-        "dusun": "Dusun Krajan 1 / Krajan 2",
-        "category": "Area Evakuasi Terbuka",
-        "coords": [-7.3078, 109.8080],
-        "color": "darkgreen",
-        "icon": "flag",
-        "desc": "Area terbuka datar di jantung Desa Pagentan yang aman dari jangkauan mahkota tebing maupun alur sungai.",
-        "info": "Titik Kumpul Terbuka Warga",
-    },
-    {
-        "name": "Layanan Medis / Puskesmas Pagentan",
-        "dusun": "Dusun Krajan 1 (Jalur Utama)",
-        "category": "Fasilitas Kesehatan Darurat",
-        "coords": [-7.3064, 109.8072],
-        "color": "cadetblue",
-        "icon": "heart",
-        "desc": "Titik rujukan pertolongan pertama medis & evakuasi kelompok rentan (lansia, ibu hamil, balita).",
-        "info": "Rujukan Medis Kedaruratan Desa",
-    },
-    {
-        "name": "Titik Pantau Lereng Dusun Bulu (RW 05–06)",
-        "dusun": "Dusun Bulu (RW 05–06)",
-        "category": "Pantauan Tebing Kritis",
-        "coords": [-7.2996, 109.8062],
-        "color": "red",
-        "icon": "warning-sign",
-        "desc": "Zona gawir perbukitan terjal sisi utara Desa Pagentan (>35°, arah Gunung Putih). Fokus pantauan retakan tanah podsolik.",
-        "info": "Jauhi Bawah Tebing Saat Hujan >50 mm",
-    },
-    {
-        "name": "Titik Pantau Lereng Dusun Sawangan (RW 07)",
-        "dusun": "Dusun Sawangan (RW 07)",
-        "category": "Pantauan Sungai & Rawa Tebing",
-        "coords": [-7.3112, 109.8126],
-        "color": "orange",
-        "icon": "eye-open",
-        "desc": "Zona pertemuan alur sungai & cekungan rawa lereng Dusun Sawangan. Rawan gerusan kaki tebing & lumpur.",
-        "info": "Pantau Debit & Kekeruhan Air Sungai",
-    },
-    {
-        "name": "Titik Pantau Lereng Dusun Tedunan (RW 08)",
-        "dusun": "Dusun Tedunan (RW 08)",
-        "category": "Pantauan Tebing & Turunan",
-        "coords": [-7.3042, 109.8154],
-        "color": "red",
-        "icon": "warning-sign",
-        "desc": "Jalur kelerengan menurun curam sisi timur Desa Pagentan (arah Tedungan) dengan lapisan tanah pelapukan tebal.",
-        "info": "Waspada Longsoran Tebing Jalan",
-    },
-    {
-        "name": "Titik Pantau Drainase Lereng Krajan 2 (RW 03–04)",
-        "dusun": "Dusun Krajan 2 (RW 03–04)",
-        "category": "Pantauan Drainase & Lembah",
-        "coords": [-7.3084, 109.8122],
-        "color": "orange",
-        "icon": "tint",
-        "desc": "Titik pantau limpasan selokan/gorong-gorong permukiman yang mengarah ke bibir lembah sungai desa.",
-        "info": "Pastikan Selokan Tidak Tersumbat",
-    },
-    {
-        "name": "Pos Ronda Siaga Sektor Utara–Barat (Bulu & Krajan 1)",
-        "dusun": "Dusun Bulu / Dusun Krajan 1",
-        "category": "Pos Ronda & Kentongan",
-        "coords": [-7.3032, 109.8078],
-        "color": "purple",
-        "icon": "bell",
-        "desc": "Pos jaga warga dilengkapi kentongan tanda bahaya & papan QR Code SIPALDO-PAGENTAN.",
-        "info": "Ronda Malam Bergilir RT/RW",
-    },
-    {
-        "name": "Pos Ronda Siaga Sektor Selatan–Timur (Sawangan & Tedunan)",
-        "dusun": "Dusun Sawangan / Dusun Tedunan",
-        "category": "Pos Ronda & Kentongan",
-        "coords": [-7.3102, 109.8100],
-        "color": "purple",
-        "icon": "bell",
-        "desc": "Pos pemantauan warga untuk peringatan dini kawasan lembah sungai Sawangan & lereng Tedunan.",
-        "info": "Ronda Malam Bergilir RT/RW",
-    },
-]
+# Titik lokal bersumber dari lokasi_desa.py (satu sumber kebenaran).
+# Gunakan get_titik_lokal(overrides) bila petugas sudah mengkalibrasi koordinat.
+VITAL_LOCATIONS = TITIK_LOKAL
 
 
 def resolve_dusun_sector(center_lat: float, center_lon: float) -> str:
@@ -175,22 +81,25 @@ def resolve_dusun_sector(center_lat: float, center_lon: float) -> str:
     - Dusun Krajan 2 (RW 03–04) : Sektor tengah–timur permukiman desa
     - Dusun Sawangan (RW 07)    : Sektor selatan & lembah pertemuan alur sungai
     """
-    # Zona Utara (perbukitan Bulu) — lat lebih tinggi dari -7.3030
-    if center_lat >= -7.3030:
-        if center_lon <= 109.8105:
-            return "Dusun Bulu (RW 05–06)"
-        return "Dusun Tedunan (RW 08)"
-    # Zona Selatan (lembah & alur sungai Sawangan) — lat lebih rendah dari -7.3090
-    if center_lat <= -7.3090:
-        if center_lon >= 109.8070:
+    # Peta sektor disusun mengikuti posisi fasilitas hasil verifikasi perangkat desa:
+    #   Krajan 1 (utara–tengah) : Balai Desa, Puskesmas, Kecamatan, Lapangan Rawa Sakti, SMPN 1
+    #   Krajan 2 (tengah–selatan): MI Muhammadiyah, Masjid Baitul Makmur, SDN 1
+    #   Sawangan (barat & selatan): Masjid Al Ikhlas, MI GUPPI, Masjid An Nur, Masjid Baitul'nangim
+    #   Bulu (utara–barat perbukitan) & Tedunan (timur)
+    if center_lat <= -7.3056:
+        return "Dusun Tedunan (RW 08)" if center_lon >= 109.8145 else "Dusun Sawangan (RW 07)"
+    if center_lat <= -7.3019:
+        if center_lon <= 109.8065:
             return "Dusun Sawangan (RW 07)"
-        return "Dusun Krajan 1 (RW 01–02)"
-    # Koridor tengah desa (-7.3030 s.d. -7.3090)
-    if center_lon > 109.8145:
+        if center_lon >= 109.8145:
+            return "Dusun Tedunan (RW 08)"
+        return "Dusun Krajan 2 (RW 03–04)"
+    # Koridor utara (-7.2932 s.d. -7.3018)
+    if center_lon <= 109.8075:
+        return "Dusun Bulu (RW 05–06)"
+    if center_lon >= 109.8135:
         return "Dusun Tedunan (RW 08)"
-    if center_lon <= 109.8078:
-        return "Dusun Krajan 1 (RW 01–02)"
-    return "Dusun Krajan 2 (RW 03–04)"
+    return "Dusun Krajan 1 (RW 01–02)"
 
 
 def _min_dist_to_polyline(lat: float, lon: float, polyline: list[list[float]]) -> float:
@@ -385,6 +294,7 @@ def _build_map_impl(
     basemap_style: str = "OpenStreetMap",
     user_location: dict | None = None,
     radius_m: int = 250,
+    titik_lokal: list[dict] | None = None,
 ) -> tuple[folium.Map, dict, list[dict]]:
     """
     Membangun objek peta interaktif Folium lengkap beserta statistik grid
@@ -538,8 +448,10 @@ def _build_map_impl(
         evac_group.add_to(m)
 
     # 5. Marker (Pin) Lokasi Penting Seluruh Desa Pagentan (10 Titik Lokal)
-    marker_group = folium.FeatureGroup(name="Titik Penting Seluruh Desa Pagentan", show=True)
-    for loc in VITAL_LOCATIONS:
+    marker_vital = folium.FeatureGroup(name="Titik Vital (desa, posko, pantau, pos ronda)", show=True)
+    marker_fasum = folium.FeatureGroup(name="Fasilitas Umum (sekolah, masjid, kecamatan)", show=True)
+    _titik = titik_lokal if titik_lokal is not None else get_titik_lokal()
+    for loc in _titik:
         pin_html = f"""
         <div style="font-family:sans-serif; min-width:225px; font-size:13px; line-height:1.45;">
             <div style="font-size:11px; font-weight:700; color:#15803D; text-transform:uppercase;">
@@ -551,18 +463,31 @@ def _build_map_impl(
             <div style="margin-bottom:6px; color:#334155;">{loc['desc']}</div>
             <div style="background:#F1F5F9; padding:5px 8px; border-radius:6px; font-size:12px;">
                 <b>Keterangan:</b> {loc['info']}<br>
-                <b>Koordinat:</b> {loc['coords'][0]:.4f}, {loc['coords'][1]:.4f}
+                <b>Koordinat:</b> {loc['coords'][0]:.5f}, {loc['coords'][1]:.5f}
+            </div>
+            <div style="margin-top:6px; padding:5px 8px; border-radius:6px; font-size:11.5px;
+                        background:{'#FEF2F2' if loc.get('sumber') != 'terverifikasi' else '#F0FDF4'};
+                        color:{'#991B1B' if loc.get('sumber') != 'terverifikasi' else '#14532D'};">
+                {'⚠️ <b>Koordinat masih ESTIMASI</b> — belum disurvei lapangan.' if loc.get('sumber') != 'terverifikasi'
+                 else '✅ <b>Koordinat sudah diverifikasi</b> petugas desa.'}
+                {'<br>' + loc.get('catatan', '') if loc.get('catatan') else ''}
             </div>
         </div>
         """
         folium.Marker(
             location=loc["coords"],
-            tooltip=f"📍 {loc['name']}",
+            tooltip=(
+                f"📍 {loc['name']}"
+                + ("" if loc.get("sumber") == "terverifikasi" else "  ⚠️ (estimasi)")
+            ),
             popup=folium.Popup(pin_html, max_width=280),
             icon=folium.Icon(color=loc["color"], icon=loc["icon"]),
-        ).add_to(marker_group)
+        ).add_to(
+            marker_fasum if loc.get("kategori_layer") == "fasum" else marker_vital
+        )
 
-    marker_group.add_to(m)
+    marker_vital.add_to(m)
+    marker_fasum.add_to(m)
 
     # 6. Penanda Posisi Real-Time Warga (GPS HP) + Lingkaran Jangkauan
     if user_location and user_location.get("lat") is not None:
@@ -697,17 +622,31 @@ def is_inside_pagentan(lat: float, lon: float, buffer_deg: float = 0.0025) -> bo
     )
 
 
-def nearest_vital_location(lat: float, lon: float) -> dict:
-    """Titik lokal (posko, balai desa, titik pantau lereng, pos ronda) terdekat dari posisi warga."""
+def nearest_vital_location(
+    lat: float,
+    lon: float,
+    titik_lokal: list[dict] | None = None,
+    hanya_aman: bool = True,
+) -> dict:
+    """
+    Titik lokal terdekat dari posisi warga.
+    `hanya_aman=True` membatasi pada titik yang layak dijadikan tujuan evakuasi
+    (Balai Desa, lapangan, sekolah, masjid, pos ronda) — bukan titik pantau tebing.
+    """
     best = None
-    for loc in VITAL_LOCATIONS:
+    _src = titik_lokal if titik_lokal is not None else get_titik_lokal()
+    if hanya_aman:
+        _aman = [t for t in _src if t.get("aman")]
+        if _aman:
+            _src = _aman
+    for loc in _src:
         dist = haversine_m(lat, lon, loc["coords"][0], loc["coords"][1])
         if best is None or dist < best["jarak_m"]:
             best = {**loc, "jarak_m": dist}
     return best or {}
 
 
-def describe_user_position(lat: float, lon: float) -> dict:
+def describe_user_position(lat: float, lon: float, titik_lokal: list[dict] | None = None) -> dict:
     """
     Menerjemahkan koordinat GPS warga menjadi informasi yang mudah dipahami:
     nama dusun, karakter lereng, kemiringan, arahan evakuasi, dan titik terdekat.
@@ -731,7 +670,7 @@ def describe_user_position(lat: float, lon: float) -> dict:
         "terrain_desc": morph["terrain_desc"],
         "arahan": arahan,
         "jarak_ke_balai_m": haversine_m(lat, lon, MAP_CENTER[0], MAP_CENTER[1]),
-        "titik_terdekat": nearest_vital_location(lat, lon),
+        "titik_terdekat": nearest_vital_location(lat, lon, titik_lokal),
         "di_dalam_desa": is_inside_pagentan(lat, lon),
     }
 
@@ -744,6 +683,7 @@ def build_pagentan_gis_map(
     basemap_style: str = "OpenStreetMap",
     user_location: dict | None = None,
     radius_m: int = 250,
+    titik_lokal: list[dict] | None = None,
 ) -> tuple[folium.Map, dict, list[dict]]:
     """Versi lanjutan build_pagentan_gis_map dengan penanda posisi real-time warga."""
     return _build_map_impl(
@@ -754,4 +694,5 @@ def build_pagentan_gis_map(
         basemap_style=basemap_style,
         user_location=user_location,
         radius_m=radius_m,
+        titik_lokal=titik_lokal,
     )

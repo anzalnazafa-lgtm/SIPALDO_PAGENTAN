@@ -9,6 +9,8 @@ Dusun Krajan 1, Dusun Krajan 2, Dusun Bulu, Dusun Sawangan, dan Dusun Tedunan.
 
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 import streamlit as st
 from streamlit_folium import st_folium
@@ -18,6 +20,11 @@ from charts_qr import (
     build_3day_rainfall_chart,
     build_hourly_timeline_chart,
     generate_village_qr_png,
+)
+from lokasi_desa import (
+    LAPORAN_VERIFIKASI,
+    TITIK_LOKAL,
+    get_titik_lokal,
 )
 from gis_engine import (
     LAT_NORTH,
@@ -316,6 +323,10 @@ if "manual_titik" not in st.session_state:
 if "loc_message" not in st.session_state:
     st.session_state.loc_message = None
 
+# Kalibrasi koordinat titik lokal oleh perangkat desa (tersimpan selama sesi/browser)
+if "titik_overrides" not in st.session_state:
+    st.session_state.titik_overrides = {}
+
 symptom_count = sum(
     int(bool(st.session_state[k]))
     for k in ("chk_retakan", "chk_rembesan", "chk_pohon", "chk_gemuruh")
@@ -331,6 +342,9 @@ else:
     weather = get_weather_data(st.session_state.data_mode)
 
 risk = classify_landslide_risk(weather, field_symptom_count=symptom_count)
+
+# Titik lokal yang dipakai peta/analisis: sudah termasuk hasil kalibrasi petugas
+titik_aktif = get_titik_lokal(st.session_state.titik_overrides)
 
 inject_custom_styles(is_emergency=risk["is_emergency"])
 
@@ -379,8 +393,8 @@ dan peta kerawanan lintas <b>5 Dusun (Krajan 1, Krajan 2, Bulu, Sawangan, &amp; 
 </p>
 <div class="hero-meta-row">
 <span class="hero-chip">📍 Desa Pagentan, Kec. Pagentan, Banjarnegara</span>
-<span class="hero-chip">🧷 Berbatasan: Plumbungan, Metawana, Kalipinggan, Buluslawang, Kasmaran</span>
-<span class="hero-chip">🧭 Pusat Desa: -7.30583, 109.80944</span>
+<span class="hero-chip">✅ 12 titik terverifikasi perangkat desa</span>
+<span class="hero-chip">🧭 Pusat Desa (Balai Desa): -7.30043, 109.80995</span>
 <span class="hero-chip">⛰️ Elevasi: ±{weather['elevation_m']} mdpl</span>
 <span class="hero-chip">🕒 Pembaruan: {weather['updated_at']}</span>
 </div>
@@ -405,7 +419,7 @@ with pilar_col2:
         """<div class="sipaldo-card">
 <div style="font-size:1.35rem; margin-bottom:4px;">🗺️ <b>2. Cakupan Seluruh 5 Dusun</b></div>
 <div style="color:#475569; font-size:0.96rem;">
-Memetakan 100 blok grid &amp; 10 titik lokal di <b>Krajan 1, Krajan 2, Bulu, Sawangan, dan Tedunan</b> (RW 01–RW 08).
+Memetakan 100 blok grid &amp; <b>12 titik resmi desa</b> (sekolah, masjid, puskesmas, balai desa) di <b>Krajan 1, Krajan 2, Bulu, Sawangan, dan Tedunan</b>.
 </div>
 </div>""",
         unsafe_allow_html=True,
@@ -714,8 +728,8 @@ with m4:
 # -----------------------------------------------------------------------------
 st.markdown(
     """<div class="section-header">
-<h2>🗺️ Peta Interaktif Kerawanan Longsor &amp; Titik Lokal Seluruh Desa Pagentan</h2>
-<p>Sebaran 100 blok grid &amp; 10 titik vital di Dusun Krajan 1, Krajan 2, Bulu, Sawangan, dan Tedunan (Lat -7.2960 s.d. -7.3160 &amp; Lon 109.7990 s.d. 109.8200) — berbatasan dengan Desa Plumbungan, Metawana, Kalipinggan, Buluslawang, &amp; Kasmaran.</p>
+<h2>🗺️ Peta Interaktif Kerawanan Longsor &amp; Titik Lokal Desa Pagentan</h2>
+<p>Sebaran 100 blok grid &amp; <b>12 titik resmi desa</b> (semua terverifikasi perangkat desa) di Dusun Krajan 1, Krajan 2, Bulu, Sawangan, dan Tedunan — Lat -7.2932 s.d. -7.3110 &amp; Lon 109.8010 s.d. 109.8190.</p>
 </div>""",
     unsafe_allow_html=True,
 )
@@ -758,6 +772,7 @@ folium_map, grid_counts, dusun_summary = build_pagentan_gis_map(
     show_evac_routes=show_evac_layer,
     basemap_style=basemap_choice,
     user_location=st.session_state.user_loc,
+    titik_lokal=titik_aktif,
 )
 
 map_col, info_col = st.columns([2.35, 1.0])
@@ -794,16 +809,15 @@ with info_col:
 <span style="font-weight:900; font-size:1.15rem; color:#16A34A;">{grid_counts['hijau']}</span>
 </div>
 <hr style="border:none; border-top:1px solid #E2E8F0; margin:10px 0;">
-<div style="font-weight:800; font-size:0.95rem; margin-bottom:6px;">📍 10 Titik Lokal Seluruh Desa:</div>
-<div style="font-size:0.88rem; color:#334155; line-height:1.52;">
-🔵 <b>Balai Desa Pagentan</b> (Krajan 1)<br>
-🟢 <b>Posko Kebencanaan Desa</b> (Krajan 2)<br>
-🏳️ <b>Lapangan Desa</b> &amp; 🩵 <b>Puskesmas</b><br>
-🔴 <b>Pantau Lereng Bulu</b> (RW 05–06)<br>
-🟠 <b>Pantau Sungai Sawangan</b> (RW 07)<br>
-🔴 <b>Pantau Lereng Tedunan</b> (RW 08)<br>
-🟠 <b>Pantau Drainase Krajan 2</b> (RW 03–04)<br>
-🟣 <b>2 Pos Ronda Siaga Lintas Dusun</b>
+<div style="font-weight:800; font-size:0.95rem; margin-bottom:6px;">📍 {len(titik_aktif)} Titik Resmi Desa (klik ikon layer di peta):</div>
+<div style="font-size:0.86rem; color:#334155; line-height:1.55;">
+🔵 <b>Balai Desa Pagentan</b> (pusat komando)<br>
+🏳️ <b>Lapangan Rawa Sakti</b> (titik kumpul warga)<br>
+🩵 <b>Puskesmas Pagentan 1</b><br>
+🏛️ <b>Kantor Kecamatan Pagentan</b><br>
+🎓 <b>SMPN 1, SDN 1, MI Muhammadiyah, MI GUPPI</b><br>
+🕌 <b>Masjid Baitul Makmur, Baitul'nangim, Al Ikhlas, An Nur</b><br>
+<span style="color:#15803D; font-weight:700;">✅ 12 dari 12 titik terverifikasi perangkat desa</span>
 </div>
 <hr style="border:none; border-top:1px solid #E2E8F0; margin:10px 0;">
 <div style="font-size:0.82rem; color:#64748B;">
@@ -823,10 +837,124 @@ st.dataframe(
     hide_index=True,
 )
 
-with st.expander("📋 Lihat Rincian Lengkap 10 Titik Lokal & Koordinat Seluruh Desa Pagentan"):
-    for item in VITAL_LOCATIONS:
+with st.expander("📋 Lihat Rincian Lengkap 10 Titik Lokal, Koordinat & Status Akurasi"):
+    st.caption(
+        "Status koordinat: ✅ **terverifikasi** = sudah dicocokkan petugas desa; "
+        "⚠️ **estimasi** = masih perkiraan dan perlu dikoreksi."
+    )
+    for idx, item in enumerate(titik_aktif, start=1):
+        badge = "✅ terverifikasi" if item.get("sumber") == "terverifikasi" else "⚠️ estimasi"
         st.markdown(
-            f"- **{item['name']}** — *{item['dusun']}* (`{item['coords'][0]:.4f}, {item['coords'][1]:.4f}`): {item['desc']}"
+            f"**{idx}. {item['name']}** — *{item['dusun']}*  \n"
+            f"Koordinat: `{item['coords'][0]:.5f}, {item['coords'][1]:.5f}` — {badge}  \n"
+            f"{item['desc']}"
+        )
+        if item.get("catatan"):
+            st.caption(f"Catatan akurasi: {item['catatan']}")
+
+# -----------------------------------------------------------------------------
+# 6B. KALIBRASI TITIK LOKASI (VERIFIKASI KOORDINAT OLEH PERANGKAT DESA)
+# -----------------------------------------------------------------------------
+with st.expander("🔧 Kalibrasi Titik Lokasi — Perbaiki Koordinat Balai Desa, Posko, Puskesmas, dll."):
+    st.warning(LAPORAN_VERIFIKASI)
+
+    st.markdown(
+        """
+**Cara mengoreksi koordinat (2 pilihan):**
+
+1. **Paling akurat — pakai GPS HP petugas:** berdiri tepat di lokasi (misal di depan Balai Desa),
+   tekan tombol *“Gunakan Lokasi Saya (GPS HP) sebagai koordinat titik ini”*, lalu *“Simpan Koordinat Titik”*.
+2. **Pakai koordinat Google Maps:** buka Google Maps di HP → tekan lama pada lokasi → salin koordinat yang muncul
+   (format `-7.30583, 109.80944`) → tempelkan pada kolom Latitude / Longitude di bawah → *Simpan*.
+        """
+    )
+
+    nama_pilihan = [t["name"] for t in TITIK_LOKAL]
+    titik_pilih = st.selectbox(
+        "Pilih titik yang ingin dikoreksi:",
+        options=nama_pilihan,
+        key="kalibrasi_pilih",
+    )
+    _entri_kini = next(t for t in titik_aktif if t["name"] == titik_pilih)
+
+    k1, k2 = st.columns(2)
+    with k1:
+        lat_in = st.number_input(
+            "Latitude (garis lintang)",
+            value=float(_entri_kini["coords"][0]),
+            format="%.6f",
+            step=0.000010,
+            key=f"kal_lat_{titik_pilih}",
+        )
+    with k2:
+        lon_in = st.number_input(
+            "Longitude (garis bujur)",
+            value=float(_entri_kini["coords"][1]),
+            format="%.6f",
+            step=0.000010,
+            key=f"kal_lon_{titik_pilih}",
+        )
+
+    tombol1, tombol2, tombol3 = st.columns(3)
+    with tombol1:
+        pakai_gps = st.button("📍 Gunakan Lokasi Saya (GPS HP)", width="stretch")
+    with tombol2:
+        simpan = st.button("💾 Simpan Koordinat Titik", width="stretch", type="primary")
+    with tombol3:
+        reset = st.button("↩️ Kembalikan ke Estimasi Awal", width="stretch")
+
+    if pakai_gps:
+        _g = get_geolocation()
+        if _g and _g.get("coords"):
+            st.session_state.titik_overrides[titik_pilih] = {
+                "lat": float(_g["coords"]["latitude"]),
+                "lon": float(_g["coords"]["longitude"]),
+                "sumber": "terverifikasi",
+                "catatan": "Koordinat diambil langsung dengan GPS HP petugas desa.",
+            }
+            st.success(
+                f"📍 Koordinat titik **{titik_pilih}** diperbarui dari GPS HP: "
+                f"{_g['coords']['latitude']:.6f}, {_g['coords']['longitude']:.6f}. Tekan **Simpan** bila sudah benar."
+            )
+        else:
+            st.info(
+                "Izin lokasi belum diberikan. Aktifkan izin lokasi pada browser, atau masukkan koordinat "
+                "manual dari Google Maps pada kolom di atas."
+            )
+
+    if simpan:
+        st.session_state.titik_overrides[titik_pilih] = {
+            "lat": float(lat_in),
+            "lon": float(lon_in),
+            "sumber": "terverifikasi",
+            "catatan": "Koordinat dikoreksi manual oleh pengguna aplikasi.",
+        }
+        st.success(f"✅ Koordinat **{titik_pilih}** disimpan: {lat_in:.6f}, {lon_in:.6f}. Peta akan diperbarui.")
+        st.rerun()
+
+    if reset:
+        st.session_state.titik_overrides.pop(titik_pilih, None)
+        st.info(f"↩️ Titik **{titik_pilih}** dikembalikan ke koordinat estimasi awal.")
+        st.rerun()
+
+    _n_verif = sum(1 for t in titik_aktif if t.get("sumber") == "terverifikasi")
+    st.markdown(
+        f"**Status verifikasi: {_n_verif} dari {len(titik_aktif)} titik sudah diverifikasi** "
+        f"({'lengkap ✅' if _n_verif == len(titik_aktif) else 'masih ada titik estimasi ⚠️'})"
+    )
+    st.progress(_n_verif / max(len(titik_aktif), 1))
+
+    if st.session_state.titik_overrides:
+        st.download_button(
+            "⬇️ Unduh Berkas Kalibrasi (JSON) — simpan agar tidak hilang",
+            data=json.dumps(st.session_state.titik_overrides, indent=2, ensure_ascii=False),
+            file_name="kalibrasi_titik_pagentan.json",
+            mime="application/json",
+        )
+        st.caption(
+            "Berkas JSON ini berisi koordinat hasil koreksi. Simpan di komputer/HP; "
+            "agar permanen untuk semua warga, tempelkan nilai koordinatnya ke dalam berkas "
+            "`lokasi_desa.py` (variabel `TITIK_LOKAL`) di repositori GitHub Anda."
         )
 
 # -----------------------------------------------------------------------------
@@ -1011,7 +1139,7 @@ st.markdown(
 <b style="color:#FFFFFF;">SIPALDO-PAGENTAN — Sistem Peringatan Dini Longsor Desa Pagentan</b><br>
 Melayani Seluruh Wilayah Dusun Krajan 1, Krajan 2, Bulu, Sawangan, &amp; Tedunan • Kec. Pagentan, Kab. Banjarnegara, Jawa Tengah<br>
 <span style="font-size:0.82rem; color:#94A3B8;">
-Koordinat Pusat: -7.30583, 109.80944 • Sumber Cuaca: Open-Meteo API (Real-Time) • Peta Dasar: © OpenStreetMap Contributors
+Koordinat Pusat (Balai Desa): -7.30043, 109.80995 • Sumber Cuaca: Open-Meteo API (Real-Time) • Peta Dasar: © OpenStreetMap Contributors
 </span>
 </div>
 """,

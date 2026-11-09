@@ -6,6 +6,43 @@ Aplikasi WebGIS interaktif skala desa yang ringan, responsif di layar smartphone
 
 ---
 
+## 📍 Sumber & Status Akurasi Koordinat (PENTING)
+
+Semua titik berada di berkas **`lokasi_desa.py`** (satu sumber kebenaran) dengan status:
+
+| Status | Arti |
+|---|---|
+| ✅ **terverifikasi** (12 titik) | Koordinat dikirim langsung oleh **perangkat Desa Pagentan** (survey GPS/Google Maps, November 2026). |
+| ⚠️ **estimasi** (0 titik) | Tidak ada lagi titik estimasi — 7 titik lama (pantau lereng, drainase, pos ronda, posko) sudah dihapus. |
+
+**12 titik terverifikasi** — pusat desa kini memakai koordinat **Balai Desa Pagentan (-7.300433, 109.809946)**:
+
+| Titik | Koordinat |
+|---|---|
+| Balai Desa Pagentan | -7.300433, 109.809946 |
+| Kantor Kecamatan Pagentan | -7.301041, 109.810175 |
+| Puskesmas Pagentan 1 | -7.300635, 109.810107 |
+| Lapangan Rawa Sakti (titik kumpul) | -7.298135, 109.810761 |
+| SMP Negeri 1 Pagentan | -7.298747, 109.810458 |
+| MI Muhammadiyah Pagentan | -7.302191, 109.810094 |
+| SDN 1 Pagentan | -7.304172, 109.809849 |
+| Masjid Baitul Makmur | -7.302351, 109.810019 |
+| Masjid Baitul'nangim | -7.310211, 109.812041 |
+| Masjid Al Ikhlas | -7.306455, 109.801653 |
+| MI GUPPI Pagentan | -7.306774, 109.801244 |
+| Masjid An Nur | -7.306621, 109.800307 |
+
+**Titik estimasi sudah DIHAPUS dari aplikasi** (permintaan perangkat desa): titik pantau lereng,
+pantau drainase Krajan 2, dan 2 pos ronda tidak lagi ditampilkan karena belum ada koordinat resminya.
+
+**Cara menambah titik baru nanti:** aplikasi → **🔧 Kalibrasi Titik Lokasi** → pilih/berdiri di lokasi →
+**📍 Gunakan Lokasi Saya (GPS HP)** → **💾 Simpan** → tempelkan nilai lat/lon ke `lokasi_desa.py` (`TITIK_LOKAL`).
+
+**Cara memperbarui aplikasi tanpa mengulang dari awal:** lihat **[`CARA_UPDATE_TANPA_REPO_ULANG.md`](CARA_UPDATE_TANPA_REPO_ULANG.md)** —
+cukup edit berkas di GitHub → commit → Streamlit Cloud rebuild otomatis.
+
+---
+
 ## ✨ Fitur Utama
 1. **Cakupan Penuh Seluruh Wilayah Desa Pagentan (5 Dusun, RW 01–08)**:
    - **Dusun Krajan 1 (RW 01–02)**: Balai Desa Pagentan, Puskesmas/Layanan Medis, Jalur Utama.
@@ -17,7 +54,7 @@ Aplikasi WebGIS interaktif skala desa yang ringan, responsif di layar smartphone
    - Warga menekan **“Aktifkan Lokasi Saya (GPS HP)”**; browser meminta izin lokasi (bekerja di semua HP Android/iPhone, tanpa aplikasi tambahan).
    - Sistem langsung menampilkan: **nama dusun**, **karakter lereng & kemiringan** di titik warga, **situasi cuaca real-time di titik tersebut** (hujan 24 jam, akumulasi 3 hari, kejenuhan tanah, suhu, elevasi), **status bahaya di titik warga** (Relatif Aman / Perlu Dipantau / Bahaya Tinggi), **arahan evakuasi**, **titik aman terdekat beserta jaraknya (meter)**, dan **jarak ke Balai Desa**.
    - Peta otomatis memusat ke posisi warga: pin **“Lokasi Anda”**, lingkaran radius pantau ±250 m, serta garis jalur menuju titik aman terdekat.
-   - **Alternatif tanpa GPS**: dropdown 10 titik lokal (5 dusun) untuk memilih lokasi secara manual.
+   - **Alternatif tanpa GPS**: dropdown 12 titik resmi desa (semua terverifikasi perangkat desa) untuk memilih lokasi secara manual.
    - **Privasi**: koordinat hanya dipakai di perangkat warga, tidak disimpan di server, dan bisa dimatikan kapan saja.
 3. **Integrasi Cuaca Real-Time Open-Meteo (Gratis & Tanpa API Key)**:
    - Menembak langsung ke koordinat pusat Desa Pagentan (`-7.30583, 109.80944`) untuk menarik akumulasi curah hujan 24 jam, tren historis 3 hari terakhir, prakiraan 12 jam ke depan, serta kelembaban tanah (`3–9 cm`).
