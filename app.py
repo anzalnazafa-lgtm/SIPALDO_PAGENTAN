@@ -21,6 +21,22 @@ from charts_qr import (
     build_hourly_timeline_chart,
     generate_village_qr_png,
 )
+from ews_features import (
+    DUSUN_POS,
+    DUSUN_SLUG,
+    resolve_dusun_slug,
+    KONDISI_PATROLI,
+    analisis_antisipasi,
+    kirim_telegram,
+    log_ke_csv,
+    muat_log,
+    pesan_wa_patroli,
+    rekap_log,
+    simpan_log,
+    susun_pesan_status,
+    tambah_entri_log,
+    telegram_terkonfigurasi,
+)
 from lokasi_desa import (
     LAPORAN_VERIFIKASI,
     TITIK_LOKAL,
@@ -327,6 +343,14 @@ if "loc_message" not in st.session_state:
 if "titik_overrides" not in st.session_state:
     st.session_state.titik_overrides = {}
 
+# Log patroli Pos Ronda (tersimpan di berkas JSON lokal agar tidak hilang saat refresh)
+if "log_patroli" not in st.session_state:
+    st.session_state.log_patroli = muat_log()
+
+# Antisipasi 6–12 jam: hitung setiap render setelah data cuaca tersedia
+if "telegram_terakhir" not in st.session_state:
+    st.session_state.telegram_terakhir = None
+
 symptom_count = sum(
     int(bool(st.session_state[k]))
     for k in ("chk_retakan", "chk_rembesan", "chk_pohon", "chk_gemuruh")
@@ -346,6 +370,9 @@ risk = classify_landslide_risk(weather, field_symptom_count=symptom_count)
 # Titik lokal yang dipakai peta/analisis: sudah termasuk hasil kalibrasi petugas
 titik_aktif = get_titik_lokal(st.session_state.titik_overrides)
 
+# Antisipasi 6–12 jam ke depan (indikator "leading", bukan hanya kondisi saat ini)
+antisipasi = analisis_antisipasi(weather)
+
 inject_custom_styles(is_emergency=risk["is_emergency"])
 
 # -----------------------------------------------------------------------------
@@ -364,6 +391,46 @@ elif risk["level"] == "WASPADA":
 else:
     st.markdown(
         f'<div class="top-banner-aman">✅ {risk["banner_text"]}</div>',
+        unsafe_allow_html=True,
+    )
+
+# --- Deteksi QR Pos Ronda: parameter ?pos=Dusun di URL ---
+_pos_param = ""
+try:
+    _pos_param = (st.query_params.get("pos") or "").strip()
+except Exception:
+    try:
+        _pos_param = (st.experimental_get_query_params().get("pos", [""])[0] or "").strip()
+    except Exception:
+        _pos_param = ""
+
+if _pos_param:
+    _cocok = resolve_dusun_slug(_pos_param)
+    if _cocok:
+        st.markdown(
+            f"""<div style="background:#ECFDF5; border:2px solid #34D399; border-radius:12px;
+            padding:12px 16px; margin-bottom:12px; font-size:1rem; color:#065F46;">
+            🏠 <b>Anda memindai QR {_cocok}</b> — silakan lanjut ke bagian
+            <b>Log Patroli Pos Ronda</b> di bawah untuk mencatat hasil ronda malam ini.
+            </div>""",
+            unsafe_allow_html=True,
+        )
+
+# Banner tambahan: ANTISIPASI 6–12 JAM KE DEPAN (hujan turun + prakiraan)
+if antisipasi["level"] != "AMAN_TERKENDALI" and not weather["is_offline"]:
+    _ikon = "🌧️" if antisipasi["level"] == "ANTISIPASI_WASPADA" else "⏳"
+    st.markdown(
+        f"""<div style="background:#FFF7ED; border:2.5px dashed {antisipasi['warna']};
+        border-radius:14px; padding:14px 18px; margin-bottom:14px;">
+<div style="font-size:0.82rem; font-weight:800; color:{antisipasi['warna']}; letter-spacing:0.5px;">
+{_ikon} ANTISIPASI 6–12 JAM KE DEPAN (INDIKATOR AWAL)
+</div>
+<div style="font-size:clamp(1.02rem, 2.4vw, 1.22rem); font-weight:800; color:#7C2D12; margin:4px 0 6px 0;">
+{antisipasi['judul']}
+</div>
+<div style="font-size:0.98rem; color:#1E293B; margin-bottom:6px;">{antisipasi['pesan']}</div>
+<div style="font-size:0.95rem; color:#334155;"><b>Siapkan sekarang:</b> {antisipasi['arahan']}</div>
+</div>""",
         unsafe_allow_html=True,
     )
 
@@ -723,6 +790,27 @@ with m4:
         unsafe_allow_html=True,
     )
 
+# Kartu indikator antisipasi 6–12 jam
+_persen = min(antisipasi["proyeksi"] / 50.0 * 100, 100)
+st.markdown(
+    f"""<div class="metric-tile" style="border:2px solid {antisipasi['warna']};">
+<div class="metric-label">⏳ Proyeksi Hujan 12 Jam ke Depan</div>
+<div style="display:flex; flex-wrap:wrap; gap:18px; align-items:baseline; margin:6px 0;">
+<div class="metric-value" style="color:{antisipasi['warna']}; margin:0;">{antisipasi['proyeksi']:.1f} mm</div>
+<div class="metric-sub" style="font-size:0.95rem;">
+= hujan 24 jam <b>{antisipasi['hujan_awal']:.1f} mm</b> + prakiraan 12 jam <b>{antisipasi['prakiraan_12j']:.1f} mm</b>
+</div>
+</div>
+<div style="background:#E2E8F0; border-radius:99px; height:10px; overflow:hidden; margin-bottom:6px;">
+<div style="width:{_persen:.0f}%; height:100%; background:{antisipasi['warna']};"></div>
+</div>
+<div class="metric-sub">
+Ambang SIAGA 50 mm {'· <b style="color:#DC2626;">diperkirakan tercapai ± pukul ' + antisipasi['jam_capai'] + ' WIB</b>' if antisipasi['jam_capai'] else '· belum diperkirakan tercapai'}
+</div>
+</div>""",
+    unsafe_allow_html=True,
+)
+
 # -----------------------------------------------------------------------------
 # 6. BAGIAN 2: PETA INTERAKTIF KERAWANAN LONGSOR SELURUH DESA PAGENTAN
 # -----------------------------------------------------------------------------
@@ -1080,6 +1168,266 @@ Koordinasi langsung Kepala Dusun (Krajan 1, Krajan 2, Bulu, Sawangan, Tedunan) &
     st.markdown(contacts_html, unsafe_allow_html=True)
 
 # -----------------------------------------------------------------------------
+# 8A. SKENARIO LATIHAN EVAKUASI (SIMULASI EDUKASI WARGA)
+# -----------------------------------------------------------------------------
+st.markdown(
+    """<div class="section-header">
+<h2>🎯 Skenario Latihan Evakuasi Desa</h2>
+<p>Panduan singkat untuk simulasi di sekolah (SMPN 1 / SDN 1 / MI) atau saat pertemuan RT/RW — melatih warga bereaksi cepat sebelum bencana sebenarnya.</p>
+</div>""",
+    unsafe_allow_html=True,
+)
+
+_skenario = pd.DataFrame(
+    [
+        {
+            "Skenario": "A. Hujan deras malam hari",
+            "Pemicu": "Hujan >50 mm sejak sore, tanah jenuh",
+            "Tindakan warga": "Matikan listrik, bawa tas siaga, menuju Balai Desa / Lapangan Rawa Sakti",
+            "Isyarat": "Kentongan titir (cepat, terus-menerus)",
+        },
+        {
+            "Skenario": "B. Retakan baru di lereng",
+            "Pemicu": "Retakan tapal kuda / pohon miring",
+            "Tindakan warga": "Menjauh dari kaki tebing, lapor Kadus, catat di log patroli",
+            "Isyarat": "Kentongan 3x berulang",
+        },
+        {
+            "Skenario": "C. Gemuruh dari arah tebing",
+            "Pemicu": "Suara gemuruh / kerikil berjatuhan",
+            "Tindakan warga": "Evakuasi segera tanpa mengambil barang, jangan melintas lembah",
+            "Isyarat": "Kentongan titir + pengeras suara masjid",
+        },
+        {
+            "Skenario": "D. Malam hari, listrik padam",
+            "Pemicu": "Hujan ekstrem + jaringan listrik mati",
+            "Tindakan warga": "Pakai senter/lampu kepala, ikuti jalur evakuasi bertanda, jangan sendirian",
+            "Isyarat": "Kentongan titir + kentongan pos terdekat",
+        },
+    ]
+)
+st.dataframe(_skenario, width="stretch", hide_index=True, height=210)
+
+_lat1, _lat2 = st.columns([1.2, 1.0])
+with _lat1:
+    with st.container(border=True):
+        st.markdown("#### ✅ Checklist Persiapan Latihan (dicentang petugas)")
+        for _kunci, _teks in [
+            ("lat_jalur", "Jalur evakuasi ke Balai Desa & Lapangan Rawa Sakti sudah diperiksa bebas hambatan"),
+            ("lat_titik", "Titik kumpul ditandai dan diketahui seluruh warga"),
+            ("lat_rentan", "Daftar warga rentan (lansia, ibu hamil, balita, disabilitas) sudah diperbarui"),
+            ("lat_kentongan", "Kentongan di setiap Pos Ronda diuji dan terdengar jelas"),
+            ("lat_kontak", "Nomor darurat (112 / BPBD / Puskesmas) ditempel di papan pengumuman"),
+            ("lat_tas", "Contoh tas siaga keluarga diperlihatkan kepada warga"),
+            ("lat_waktu", "Target waktu evakuasi dicatat (contoh: < 15 menit)"),
+        ]:
+            st.checkbox(_teks, key=_kunci)
+
+        _jumlah_cek = sum(
+            1
+            for _k in ("lat_jalur", "lat_titik", "lat_rentan", "lat_kentongan", "lat_kontak", "lat_tas", "lat_waktu")
+            if st.session_state.get(_k)
+        )
+        st.progress(_jumlah_cek / 7)
+        if _jumlah_cek == 7:
+            st.success("✅ Seluruh persiapan latihan lengkap. Siap dilaksanakan bersama warga.")
+        else:
+            st.info(f"{_jumlah_cek} dari 7 butir persiapan sudah dicentang.")
+
+with _lat2:
+    with st.container(border=True):
+        st.markdown("#### ⏱️ Catat Hasil Latihan")
+        _tanggal_latih = st.date_input("Tanggal latihan:", key="lat_tanggal")
+        _peserta = st.number_input("Jumlah peserta:", min_value=0, value=50, step=5, key="lat_peserta")
+        _durasi = st.number_input("Waktu evakuasi tercapai (menit):", min_value=0.0, value=12.0, step=0.5, key="lat_durasi")
+        _catatan_latih = st.text_input("Catatan perbaikan:", placeholder="mis. jalur utara berlumpur, perlu diberi papan petunjuk", key="lat_catatan")
+        _ringkas = (
+            f"*LAPORAN LATIHAN EVAKUASI — DESA PAGENTAN*\n"
+            f"Tanggal: {_tanggal_latih}\n"
+            f"Peserta: {int(_peserta)} orang\n"
+            f"Waktu evakuasi: {_durasi:.1f} menit\n"
+            f"Persiapan tercentang: {_jumlah_cek}/7\n"
+            f"Catatan: {_catatan_latih or '-'}\n"
+            f"Status desa saat latihan: {risk['label_ui']} (hujan 24 jam {weather['rain_24h']:.1f} mm)"
+        )
+        st.download_button(
+            "⬇️ Unduh Ringkasan Latihan (TXT)",
+            data=_ringkas.encode("utf-8"),
+            file_name="laporan_latihan_evakuasi_pagentan.txt",
+            mime="text/plain",
+            width="stretch",
+        )
+
+# -----------------------------------------------------------------------------
+# 8B. LOG PATROLI POS RONDA + NOTIFIKASI TELEGRAM
+# -----------------------------------------------------------------------------
+st.markdown(
+    """<div class="section-header">
+<h2>📝 Log Patroli Pos Ronda &amp; Notifikasi Otomatis</h2>
+<p>Catat hasil ronda malam per dusun, pantau rekapnya, lalu kirim laporan ke grup WhatsApp desa atau bot Telegram.</p>
+</div>""",
+    unsafe_allow_html=True,
+)
+
+_log = st.session_state.log_patroli
+_log_col, _notif_col = st.columns([1.45, 1.0])
+
+with _log_col:
+    with st.container(border=True):
+        st.markdown("### 🗒️ Catat Hasil Patroli Malam")
+        _f1, _f2 = st.columns(2)
+        with _f1:
+            _dusun_log = st.selectbox("Pos Ronda / Dusun:", DUSUN_POS, key="log_dusun")
+        with _f2:
+            _kondisi_log = st.selectbox(
+                "Hasil pemeriksaan:",
+                options=list(KONDISI_PATROLI.keys()),
+                format_func=lambda k: KONDISI_PATROLI[k]["label"],
+                key="log_kondisi",
+            )
+        _petugas_log = st.text_input(
+            "Nama petugas ronda:", placeholder="mis. Pak Sutris (RT 03)", key="log_petugas"
+        )
+        _catatan_log = st.text_input(
+            "Catatan temuan (opsional):",
+            placeholder="mis. rembesan keruh di kaki tebing utara, retakan ±2 cm",
+            key="log_catatan",
+        )
+        if st.button("💾 Simpan Laporan Patroli", type="primary", width="stretch"):
+            st.session_state.log_patroli = tambah_entri_log(
+                st.session_state.log_patroli,
+                dusun=_dusun_log,
+                kondisi=_kondisi_log,
+                petugas=_petugas_log,
+                catatan=_catatan_log,
+                cuaca={**weather, "_status": risk["label_ui"]},
+            )
+            simpan_log(st.session_state.log_patroli)
+            st.success("✅ Laporan patroli tersimpan.")
+            st.rerun()
+
+        if _log:
+            st.markdown("#### 📊 Rekap Laporan Patroli per Dusun")
+            st.dataframe(rekap_log(_log), width="stretch", hide_index=True)
+
+            _terakhir = _log[-1]
+            st.markdown("#### 📋 Laporan Terakhir")
+            st.markdown(
+                f"- **{_terakhir['dusun']}** — {_terakhir['waktu']} WIB  \n"
+                f"  Petugas: {_terakhir['petugas']}  \n"
+                f"  Hasil: **{_terakhir['label_kondisi']}**  \n"
+                f"  Catatan: {_terakhir['catatan'] or '—'}"
+            )
+            if _terakhir["kondisi"] == "GEJALA_BERAT":
+                st.error(
+                    "🚨 Laporan terakhir berisi gejala berat. Segera koordinasikan dengan Kepala Dusun & Posko Desa, "
+                    "dan pertimbangkan evakuasi mandiri warga di sekitar titik tersebut."
+                )
+            elif _terakhir["kondisi"] == "GEJALA_RINGAN":
+                st.warning(
+                    "⚠️ Laporan terakhir berisi gejala ringan. Tambah frekuensi pantau (setiap 1–2 jam) "
+                    "dan catat perubahan kondisi pada laporan berikutnya."
+                )
+
+            st.text_area(
+                "📱 Teks laporan siap kirim ke grup WhatsApp desa (salin/tempel):",
+                value=pesan_wa_patroli(_terakhir, weather, antisipasi),
+                height=190,
+            )
+
+            _d1, _d2 = st.columns(2)
+            with _d1:
+                st.download_button(
+                    "⬇️ Unduh Log Patroli (CSV)",
+                    data=log_ke_csv(_log),
+                    file_name="log_patroli_pagentan.csv",
+                    mime="text/csv",
+                    width="stretch",
+                )
+            with _d2:
+                if st.button("🗑️ Hapus Semua Log Patroli", width="stretch"):
+                    st.session_state.log_patroli = []
+                    simpan_log([])
+                    st.info("Log patroli dikosongkan.")
+                    st.rerun()
+
+            with st.expander("📄 Lihat Seluruh Riwayat Laporan"):
+                st.dataframe(pd.DataFrame(_log[::-1]), width="stretch", hide_index=True)
+        else:
+            st.info(
+                "Belum ada laporan patroli. Setelah petugas ronda mencatat hasil pemeriksaan, "
+                "rekap per dusun dan teks laporan WhatsApp akan muncul di sini."
+            )
+
+with _notif_col:
+    with st.container(border=True):
+        st.markdown("### 📨 Notifikasi Otomatis (Telegram)")
+        st.caption(
+            "Aplikasi web tidak bisa mengirim pesan tanpa izin. Dengan bot Telegram desa, "
+            "peringatan bisa sampai ke warga **tanpa harus membuka aplikasi**."
+        )
+
+        _tg_token = st.text_input(
+            "Token Bot Telegram:",
+            type="password",
+            placeholder="123456789:AAH...",
+            help="Dapatkan dari @BotFather di Telegram.",
+            key="tg_token",
+        )
+        _tg_chat = st.text_input(
+            "Chat ID / ID Grup:",
+            placeholder="mis. -1001234567890",
+            help="Kirim 1 pesan ke bot, lalu buka https://api.telegram.org/bot<TOKEN>/getUpdates untuk melihat chat.id.",
+            key="tg_chat",
+        )
+        _label_desa = st.text_input(
+            "Label desa pada pesan:", value="Desa Pagentan", key="tg_label"
+        )
+
+        _pesan_status = susun_pesan_status(weather, risk, antisipasi, _label_desa)
+        with st.expander("👀 Pratinjau pesan yang akan dikirim"):
+            st.code(_pesan_status, language="markdown")
+
+        if st.button("🚀 Kirim Ringkasan Status ke Telegram", width="stretch", type="primary"):
+            if not telegram_terkonfigurasi(_tg_token, _tg_chat):
+                st.warning("Isi **Token Bot** dan **Chat ID** terlebih dahulu.")
+            else:
+                _ok, _ket = kirim_telegram(_tg_token, _tg_chat, _pesan_status)
+                if _ok:
+                    st.success("✅ Pesan terkirim ke Telegram.")
+                    st.session_state.telegram_terakhir = f"Status {risk['label_ui']} • {weather['updated_at']}"
+                else:
+                    st.error(f"❌ Gagal mengirim: {_ket}")
+
+        if st.button("📢 Kirim Laporan Patroli Terakhir", width="stretch"):
+            if not st.session_state.log_patroli:
+                st.warning("Belum ada laporan patroli untuk dikirim.")
+            elif not telegram_terkonfigurasi(_tg_token, _tg_chat):
+                st.warning("Isi **Token Bot** dan **Chat ID** terlebih dahulu.")
+            else:
+                _pesan = pesan_wa_patroli(st.session_state.log_patroli[-1], weather, antisipasi)
+                _ok, _ket = kirim_telegram(_tg_token, _tg_chat, _pesan.replace("*", "*"))
+                if _ok:
+                    st.success("✅ Laporan patroli terkirim ke Telegram.")
+                else:
+                    st.error(f"❌ Gagal mengirim: {_ket}")
+
+        st.divider()
+        st.markdown("**🤖 Cara membuat bot (5 menit, gratis):**")
+        st.markdown(
+            "1. Buka Telegram → cari **@BotFather** → kirim `/newbot` → ikuti petunjuk → salin **token**.\n"
+            "2. Buat grup desa → tambahkan bot tersebut sebagai anggota.\n"
+            "3. Kirim satu pesan di grup, lalu buka `https://api.telegram.org/bot<TOKEN>/getUpdates` "
+            "dan salin angka **`chat.id`** (untuk grup biasanya negatif, mis. `-100...`).\n"
+            "4. Tempel token & chat id di kolom atas → klik **Kirim Ringkasan Status**."
+        )
+        st.caption(
+            "⚠️ Jangan bagikan token bot kepada publik. Untuk peringatan otomatis setiap pagi/sore "
+            "(tanpa membuka aplikasi), lihat panduan singkat **notifikasi_telegram_otomatis.md** "
+            "di dalam paket ZIP."
+        )
+
+# -----------------------------------------------------------------------------
 # 9. BAGIAN 5: AKSES WARGA VIA QR CODE (SIAP TEMPEL DI POS RONDA & BALAI DESA)
 # -----------------------------------------------------------------------------
 st.markdown(
@@ -1115,13 +1463,42 @@ with qr_col1:
             width="stretch",
         )
 
+        st.divider()
+        st.markdown("#### 🏠 QR Code Khusus per Pos Ronda")
+        st.caption(
+            "Setiap pos ronda mendapat QR sendiri. Saat petugas memindainya, aplikasi otomatis "
+            "menyorot dusun tersebut dan membuka bagian checklist patroli."
+        )
+        _pos_pilih = st.selectbox("Pilih Pos Ronda / Dusun:", DUSUN_POS, key="qr_pos_pilih")
+        _pos_slug = DUSUN_SLUG.get(_pos_pilih, "pagentan")
+        _pos_url = f"{app_public_url.rstrip('/')}/?pos={_pos_slug}"
+        _pos_qr = generate_village_qr_png(
+            _pos_url,
+            judul=f"POS RONDA DUSUN {_pos_pilih.split(' (')[0].replace('Dusun ', '').upper()}",
+            subjudul="SIPALDO-PAGENTAN - DESA PAGENTAN",
+            label=_pos_pilih.split("(")[-1].rstrip(")") if "(" in _pos_pilih else "",
+        )
+        _q1, _q2 = st.columns([1, 1])
+        with _q1:
+            st.image(_pos_qr, width="stretch")
+        with _q2:
+            st.markdown(
+                f"**{_pos_pilih}**  \n"
+                f"Tautan QR: `{_pos_url}`  \n\n"
+                "Tempel kartu ini di dinding Pos Ronda, lalu petugas cukup memindai "
+                "untuk mencatat hasil patroli malam."
+            )
+            st.caption("Kode pos: `" + _pos_slug + "` • QR sudah berisi label dusun & RW.")
+            st.download_button(
+                "⬇️ Unduh QR Pos Ronda (PNG)",
+                data=_pos_qr,
+                file_name=f"QR_POS_RONDA_{_pos_slug.replace(' ', '_').upper()}.png",
+                mime="image/png",
+                width="stretch",
+            )
+
 with qr_col2:
     with st.container(border=True):
-        st.markdown(
-            "<div style='text-align:center; font-weight:900; font-size:1.05rem; color:#15803D;'>"
-            "SCAN PANTAU LONGSOR DESA PAGENTAN</div>",
-            unsafe_allow_html=True,
-        )
         st.image(qr_bytes, width="stretch")
         st.markdown(
             "<div style='text-align:center; font-size:0.86rem; color:#475569;'>"

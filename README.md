@@ -43,6 +43,30 @@ cukup edit berkas di GitHub → commit → Streamlit Cloud rebuild otomatis.
 
 ---
 
+## 🆕 Fitur Lanjutan (v2)
+
+1. **⏳ Antisipasi 6–12 Jam (indikator awal)** — bukan hanya status saat ini: aplikasi menjumlahkan
+   *hujan 24 jam yang sudah turun* + *prakiraan 12 jam ke depan*. Bila proyeksi >50 mm, muncul banner
+   **“ANTISIPASI SIAGA”** lengkap dengan **perkiraan jam** ambang 50 mm akan tercapai, plus kartu
+   proyeksi & progress bar di bawah 4 indikator utama. Data prakiraan per jam sudah dipakai untuk
+   menghitung waktu kedatangan, bukan sekadar ditampilkan.
+2. **📝 Log Patroli Pos Ronda** — petugas mencatat hasil ronda per dusun (Aman / Gejala Ringan /
+   Gejala Berat) beserta nama petugas dan catatan temuan. Tersimpan ke `log_patroli_pagentan.json`,
+   ada **rekap per dusun**, peringatan otomatis untuk gejala berat, **ekspor CSV**, dan
+   **teks laporan siap kirim ke grup WhatsApp desa**.
+3. **📨 Notifikasi Telegram** — kirim ringkasan status & laporan patroli ke grup Telegram desa langsung
+   dari aplikasi (gratis). Untuk peringatan **otomatis pagi/sore** tanpa membuka aplikasi, tersedia
+   `notifikasi_harian.py` + `notifikasi_telegram_otomatis.md` (GitHub Actions, Rp0).
+4. **🏠 QR Code per Pos Ronda** — setiap dusun punya QR sendiri (`?pos=Bulu`) dengan kartu berlabel.
+   Saat dipindai, aplikasi menyapa *“Anda memindai QR Pos Ronda Dusun Bulu”* dan mengarahkan petugas
+   ke bagian log patroli.
+5. **🎯 Skenario Latihan Evakuasi** — 4 tabel skenario (hujan malam, retakan baru, gemuruh tebing,
+   listrik padam) + 7 butir checklist persiapan + pencatatan waktu evakuasi & unduh laporan latihan.
+6. **📊 Grafik dengan pita ambang** — area hijau (<20 mm), kuning (20–50 mm), merah (>50 mm)
+   langsung terlihat pada grafik 3 hari maupun grafik per jam.
+
+---
+
 ## ✨ Fitur Utama
 1. **Cakupan Penuh Seluruh Wilayah Desa Pagentan (5 Dusun, RW 01–08)**:
    - **Dusun Krajan 1 (RW 01–02)**: Balai Desa Pagentan, Puskesmas/Layanan Medis, Jalur Utama.

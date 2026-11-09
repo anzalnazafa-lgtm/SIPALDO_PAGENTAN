@@ -340,7 +340,7 @@ def get_weather_data(
         sim["soil_moisture_pct"] = 64.8
         sim["weather_desc"] = "Hujan Sedang Konstan"
         sim["weather_icon"] = "🌧️"
-        sim["rain_forecast_12h"] = 16.2
+        sim["rain_forecast_12h"] = 12.2
         if len(sim["hourly_24h_df"]) > 0:
             sim["hourly_24h_df"]["curah_hujan_mm"] = [
                 round(34.6 / len(sim["hourly_24h_df"]) * (1.4 if i % 3 == 0 else 0.8), 1)

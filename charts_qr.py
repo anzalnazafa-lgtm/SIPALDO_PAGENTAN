@@ -9,7 +9,18 @@ import io
 import pandas as pd
 import plotly.graph_objects as go
 import qrcode
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
+
+
+def add_threshold_bands(fig: go.Figure) -> go.Figure:
+    """
+    Beri latar berwarna pada area grafik: hijau (<20 mm), kuning (20–50 mm),
+    merah (>50 mm) agar ambang bahaya langsung terlihat tanpa membaca angka.
+    """
+    fig.add_hrect(y0=0, y1=20, fillcolor="#16A34A", opacity=0.05, line_width=0, layer="below")
+    fig.add_hrect(y0=20, y1=50, fillcolor="#F59E0B", opacity=0.08, line_width=0, layer="below")
+    fig.add_hrect(y0=50, y1=90, fillcolor="#DC2626", opacity=0.07, line_width=0, layer="below")
+    return fig
 
 
 def build_3day_rainfall_chart(daily_df: pd.DataFrame) -> go.Figure:
@@ -108,7 +119,7 @@ def build_3day_rainfall_chart(daily_df: pd.DataFrame) -> go.Figure:
         ),
         bargap=0.38,
     )
-    return fig
+    return add_threshold_bands(fig)
 
 
 def build_hourly_timeline_chart(hourly_24h_df: pd.DataFrame, forecast_12h_df: pd.DataFrame) -> go.Figure:
@@ -151,13 +162,35 @@ def build_hourly_timeline_chart(hourly_24h_df: pd.DataFrame, forecast_12h_df: pd
         yaxis=dict(title="Intensitas (mm/jam)", gridcolor="#E2E8F0"),
         xaxis=dict(title=None, tickangle=-35, nticks=10),
     )
-    return fig
+    return add_threshold_bands(fig)
 
 
-def generate_village_qr_png(target_url: str) -> bytes:
+def _load_font(size: int):
+    """Muat font TrueType bila tersedia (agar teks QR rapi); fallback ke font bawaan PIL."""
+    for path in (
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "DejaVuSans-Bold.ttf",
+    ):
+        try:
+            return ImageFont.truetype(path, size)
+        except Exception:
+            continue
+    return ImageFont.load_default()
+
+
+def generate_village_qr_png(
+    target_url: str,
+    judul: str = "SCAN PANTAU LONGSOR",
+    subjudul: str = "DESA PAGENTAN - KAB. BANJARNEGARA",
+    label: str = "",
+) -> bytes:
     """
     Membuat gambar QR Code resolusi tinggi berbingkai rapi siap cetak untuk Pos Ronda
     dan papan pengumuman Balai Desa Pagentan.
+
+    `judul`/`subjudul`/`label` dipakai untuk kartu QR per Pos Ronda
+    (mis. judul="POS RONDA DUSUN BULU", label="RW 05-06").
     """
     qr = qrcode.QRCode(
         version=None,
@@ -180,6 +213,46 @@ def generate_village_qr_png(target_url: str) -> bytes:
         width=5,
     )
     canvas.paste(qr_img, (pad, pad))
+
+    # Bingkai kartu + judul (untuk QR per Pos Ronda)
+    if judul or subjudul or label:
+        f_header = _load_font(30)
+        f_sub = _load_font(19)
+        f_label = _load_font(22)
+
+        width = max(canvas.width + 34, 640)
+        header_h = 74 + (34 if label else 0)
+        footer_h = 46
+
+        card = Image.new("RGB", (width, header_h + canvas.height + footer_h), "#FFFFFF")
+        d2 = ImageDraw.Draw(card)
+        d2.rectangle([0, 0, width, header_h], fill="#15803D")
+
+        def _center_text(txt, font, y, fill):
+            try:
+                tw = d2.textlength(txt, font=font)
+            except Exception:
+                tw = len(txt) * 9
+            d2.text(((width - tw) / 2, y), txt, font=font, fill=fill)
+
+        _center_text(judul.upper(), f_header, 14, "#FFFFFF")
+        _center_text(subjudul.upper(), f_sub, 50, "#DCFCE7")
+        if label:
+            _center_text(label.upper(), f_label, 78, "#FEF08A")
+
+        card.paste(canvas, (int((width - canvas.width) / 2), header_h))
+
+        footer_y = header_h + canvas.height
+        d2.rectangle([0, footer_y, width, footer_y + footer_h], fill="#F0FDF4")
+        _center_text(
+            "Pindai untuk status & checklist patroli",
+            f_sub,
+            footer_y + 12,
+            "#14532D",
+        )
+        buf = io.BytesIO()
+        card.save(buf, format="PNG")
+        return buf.getvalue()
 
     buf = io.BytesIO()
     canvas.save(buf, format="PNG")
