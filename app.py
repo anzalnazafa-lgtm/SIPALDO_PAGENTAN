@@ -21,6 +21,7 @@ from charts_qr import (
     build_hourly_timeline_chart,
     generate_village_qr_png,
 )
+import tampilan_lansia
 from ews_features import (
     DUSUN_POS,
     DUSUN_SLUG,
@@ -69,6 +70,16 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+
+KEYFRAMES_BLINK = """
+<style>
+@keyframes blink-siaga-emergency {
+    0%, 100% { box-shadow: 0 0 26px rgba(220, 38, 38, 0.85); }
+    50% { box-shadow: 0 0 4px rgba(220, 38, 38, 0.25); }
+}
+</style>
+"""
 
 
 def inject_custom_styles(is_emergency: bool) -> None:
@@ -376,6 +387,40 @@ antisipasi = analisis_antisipasi(weather)
 inject_custom_styles(is_emergency=risk["is_emergency"])
 
 # -----------------------------------------------------------------------------
+# 2B. MODE LANSIA (?mode=mudah) — SATU LAYAR, TEKS BESAR & PENDEK
+# -----------------------------------------------------------------------------
+_mode_param = ""
+try:
+    _mode_param = (st.query_params.get("mode") or "").strip()
+except Exception:
+    try:
+        _mode_param = (st.experimental_get_query_params().get("mode", [""])[0] or "").strip()
+    except Exception:
+        _mode_param = ""
+
+MODE_LANSIA = tampilan_lansia.aktifkan(_mode_param)
+st.markdown(KEYFRAMES_BLINK, unsafe_allow_html=True)
+
+if MODE_LANSIA:
+    if weather["is_offline"]:
+        st.markdown(
+            '<div style="text-align:center; font-size:1.05rem; font-weight:700; color:#92400E; '
+            'background:#FEF3C7; border:2px solid #FCD34D; border-radius:12px; padding:10px; '
+            'margin-bottom:12px;">⚠️ Sedang offline — data terakhir yang dipakai.</div>',
+            unsafe_allow_html=True,
+        )
+    tampilan_lansia.render(weather, risk)
+
+    st.markdown(
+        f'<div style="max-width:760px;margin:18px auto 0 auto;text-align:center;">'
+        f'<a href="?mode=normal" style="display:inline-block;padding:12px 18px;border-radius:12px;'
+        f'border:2px solid #94A3B8;color:#334155;text-decoration:none;font-weight:700;font-size:1rem;">'
+        f'Tampilan lengkap (petugas)</a></div>',
+        unsafe_allow_html=True,
+    )
+    st.stop()
+
+# -----------------------------------------------------------------------------
 # 3. BANNER PERINGATAN DINI PALING ATAS (REAL-TIME)
 # -----------------------------------------------------------------------------
 if risk["level"] == "SIAGA":
@@ -501,6 +546,17 @@ Fitur <b>Lokasi Saya (GPS)</b> menampilkan titik Anda di peta, kondisi lereng di
 </div>""",
         unsafe_allow_html=True,
     )
+
+st.markdown(
+    """<div style="margin:6px 0 14px 0;">
+<a href="?mode=mudah" style="display:block;text-align:center;text-decoration:none;
+background:#1D4ED8;color:#FFFFFF;font-weight:900;font-size:clamp(1.05rem,3.2vw,1.25rem);
+padding:16px;border-radius:14px;">👵 Tampilan Mudah untuk Lansia</a>
+<div style="text-align:center;font-size:0.86rem;color:#475569;margin-top:6px;">
+Huruf besar, kalimat pendek, tanpa grafik.</div>
+</div>""",
+    unsafe_allow_html=True,
+)
 
 st.write("")
 
@@ -1462,6 +1518,36 @@ with qr_col1:
             mime="image/png",
             width="stretch",
         )
+
+        st.divider()
+        st.markdown("#### 👵 QR Code Tampilan Mudah untuk Lansia")
+        st.caption(
+            "QR ini membuka halaman sangat sederhana: satu status besar, tiga angka, "
+            "tiga langkah, dan tombol telepon 112. Cocok ditempel di rumah lansia, posyandu, dan masjid."
+        )
+        _lansia_url = f"{app_public_url.rstrip('/')}/?mode=mudah"
+        _lansia_qr = generate_village_qr_png(
+            _lansia_url,
+            judul="TAMPILAN MUDAH UNTUK LANSIA",
+            subjudul="SIPALDO-PAGENTAN - DESA PAGENTAN",
+            label="HURUF BESAR & RINGKAS",
+        )
+        _lq1, _lq2 = st.columns([1, 1])
+        with _lq1:
+            st.image(_lansia_qr, width="stretch")
+        with _lq2:
+            st.markdown(
+                f"**Untuk warga lansia**  \n"
+                f"Tautan: `{_lansia_url}`  \n\n"
+                "Hanya menampilkan: **AMAN / HATI-HATI / BAHAYA**, tiga angka penting, dan tiga langkah singkat."
+            )
+            st.download_button(
+                "⬇️ Unduh QR Lansia (PNG)",
+                data=_lansia_qr,
+                file_name="QR_SIPALDO_TAMPILAN_LANSIA.png",
+                mime="image/png",
+                width="stretch",
+            )
 
         st.divider()
         st.markdown("#### 🏠 QR Code Khusus per Pos Ronda")

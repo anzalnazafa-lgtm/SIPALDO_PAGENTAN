@@ -43,6 +43,21 @@ cukup edit berkas di GitHub → commit → Streamlit Cloud rebuild otomatis.
 
 ---
 
+## 👵 Mode Lansia (Tampilan Mudah)
+
+Satu halaman terpisah untuk warga lanjut usia: **`?mode=mudah`** (juga menerima `?mode=lansia` / `?mode=simple`).
+
+- **Satu layar, satu jawaban**: AMAN 😊 / HATI-HATI ⚠️ / BAHAYA 🚨 (berkedip saat SIAGA)
+- **Huruf sangat besar** (hingga ±2,4x ukuran normal) & kontras tinggi
+- **Hanya 3 angka**: Hujan 1 hari, Hujan 3 hari, Tanah (Kering / Basah / Penuh)
+- **Hanya 3 langkah** tindakan, masing-masing satu ikon + satu kalimat pendek
+- **Satu tombol besar** 📞 TELEPON 112
+- Semua grafik, tabel, log patroli, peta, dan menu **disembunyikan**
+- Tombol **👵 Tampilan Mudah untuk Lansia** tersedia di halaman utama, dan
+  **QR khusus lansia** bisa diunduh di bagian Kartu QR Code (untuk ditempel di rumah lansia, posyandu, masjid)
+
+---
+
 ## 🆕 Fitur Lanjutan (v2)
 
 1. **⏳ Antisipasi 6–12 Jam (indikator awal)** — bukan hanya status saat ini: aplikasi menjumlahkan
