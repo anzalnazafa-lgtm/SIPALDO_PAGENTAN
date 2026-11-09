@@ -1,0 +1,9 @@
+streamlit>=1.45.0
+folium>=0.17.0
+streamlit-folium>=0.18.0
+streamlit-js-eval>=1.0.0
+requests>=2.31.0
+pandas>=2.2.0
+plotly>=5.22.0
+qrcode>=7.4.2
+pillow>=10.3.0
